@@ -1,0 +1,15 @@
+.DS_Store
+Desktop.ini
+Thumbs.db
+__pycache__/
+*.py[cod]
+*$py.class
+.cache/
+.venv/
+venv/
+env/
+ENV/
+.conda/
+.ipynb_checkpoints/
+.vscode/
+.idea/
