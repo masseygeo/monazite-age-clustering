@@ -1,0 +1,13 @@
+name: monazite
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - pandas
+  - scipy
+  - numpy
+  - scikit-learn
+  - python
+  - matplotlib
+  - jupyterlab
+  - hdbscan
