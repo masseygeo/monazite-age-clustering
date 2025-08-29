@@ -4,16 +4,42 @@ import numpy as np
 from scipy.stats import norm, gaussian_kde, t
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch, Rectangle
+from sklearn.cluster import KMeans
 
 
 
+texture_colors = {'core': '#239BA7', 
+                  'overgrowth': '#ECECBB', 
+                  'rim': '#E1AA36'}
 
-def plot_samples_panel(df, ax, color_map_col, color_map, label_bool=True, timeline=[210, 450], ylabel='Age (Ma)', kde=True):
+# texture_colors = {'core': '#9CAFAA', 
+#                   'overgrowth': '#D6DAC8', 
+#                   'rim': '#FBF3D5'}
+
+
+age_group_colors = {0:'#f25117', 
+                    1:'#f2a104', 
+                    2:'#00743f', 
+                    3:'#72a2c0', 
+                    4:'#1d65a6', 
+                    5:'#192e5b',
+                    -1:'#b1b8bc'}
+
+gap = 0.3
+bar_width = 0.4
+
+
+
+def plot_samples_panel(df, ax, color_map_col, color_map, label_bool=True, timeline=[210, 450], ylabel='Age (Ma)'):
     
 
-    ##### plot sample curves...
-    sample_max = 0.0                                                # initialize sample_max to get maximum density
+    # initialize sample_max to get maximum density
+    sample_max = 0.0
+    
+    # iterate through samples...
     for _, row in df.iterrows():
+
+        # get data...
         mean = row['age']                                           # sample mean
         error = row['error']                                        # sample error (1 sigma)
         symbology = row[color_map_col]                              # symbology attribute
@@ -21,12 +47,11 @@ def plot_samples_panel(df, ax, color_map_col, color_map, label_bool=True, timeli
         density = norm.pdf(t, mean, error)                          # create density curve/points
         sample_max = max(sample_max, density.max())                 # update sample_max
 
-        # plot curve (y: age vs. x: density)
+        # plot curve (y: age vs. x: density)...
         ax.fill_between(density, t, color=color_map.get(symbology), linewidth=0.5, edgecolor='k', alpha=1)
         ax.set_xlim(0, sample_max+0.01)
     
-
-    ##### adjust ax1 styling...
+    # adjust ax styling...
     ax.set_xlim(0, sample_max+0.001)
     ax.set_xticks([])
     ax.set_ylim(timeline[0], timeline[1])
@@ -39,44 +64,42 @@ def plot_samples_panel(df, ax, color_map_col, color_map, label_bool=True, timeli
         ax.set_ylabel(None)
     ax.grid(which='major', axis='y', color='gray', alpha=1, ls="--")
 
+    return sample_max
+
     
 
-    ##### plot KDEs on twinx axis (because usually different densities & needs own scale)...
-    if kde:
-        # get basic info from df...
-        ages = df['age'].to_numpy()                        # array of means
-        errors = df['error'].to_numpy()                    # array of errors (1 sigma)
-        t = np.linspace(timeline[0], timeline[-1], 1000)   # array of age range values
 
-        # calculate standard KDE...
-        kde = gaussian_kde(ages)
-        density_std = kde(t)
+def plot_kde_panel(df, ax, timeline=[210, 450]):
 
-        # calculate error-weighted KDE...
-        density_err = np.zeros_like(t)
-        for age, err in zip(ages, errors):
-            density_err += np.exp(-(t-age)**2 / (2*err**2)) / (np.sqrt(2*np.pi)*err)
-        density_err /= len(ages)
+    # get basic info from df...
+    ages = df['age'].to_numpy()                        # array of means
+    errors = df['error'].to_numpy()                    # array of errors (1 sigma)
+    t = np.linspace(timeline[0], timeline[-1], 1000)   # array of age range values
 
-        # plot KDEs on twiny axis...
-        ax1b = ax.twiny()
-        ax1b.plot(density_std, t, color='blue', label='Standard KDE')
-        ax1b.plot(density_err, t, color='red', label='Error-weighted KDE')
+    # calculate standard KDE...
+    kde = gaussian_kde(ages)
+    density_std = kde(t)
 
-        
-        ##### adjust ax1b styling...
-        kde_max = max(density_std.max(), density_err.max())     # get maximum KDE density value
-        ax1b.set_xlim(0, kde_max+0.001)                         # set x limits of twinx
-        ax1b.set_xticks([])                                     # turn axes off of twinx
-        ax1b.set_ylim(timeline[0], timeline[1])
-        ax1b.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
-        ax1b.grid(axis='y', color='gray', alpha=1, ls='--')
-        ax1b.set_axis_off()
+    # calculate error-weighted KDE...
+    density_err = np.zeros_like(t)
+    for age, err in zip(ages, errors):
+        density_err += np.exp(-(t-age)**2 / (2*err**2)) / (np.sqrt(2*np.pi)*err)
+    density_err /= len(ages)
 
-        return sample_max, kde_max
+    # plot KDEs on twiny axis...
+    ax.plot(density_std, t, color='blue', label='Standard KDE')
+    ax.plot(density_err, t, color='red', label='Error-weighted KDE')
     
-    else:
-        return sample_max
+    # adjust ax styling...
+    kde_max = max(density_std.max(), density_err.max())     # get maximum KDE density value
+    ax.set_xlim(0, kde_max+0.001)                           # set x limits of twinx
+    ax.set_xticks([])                                       # turn axes off
+    # ax.set_ylim(timeline[0], timeline[1])
+    ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
+    ax.grid(axis='y', color='gray', alpha=1, ls='--')
+    ax.set_axis_off()
+
+    return kde_max
 
 
 
@@ -94,7 +117,7 @@ def plot_yttrium_panel(df, ax, y_col, y_symbology):
     ax.set_xlim(df[y_col].min() - 0.3, df[y_col].max() + 0.3)
     ax.set_xticks([df[y_col].min(), df[y_col].max()])
     ax.set_xticklabels([round(df[y_col].min(), 2), round(df[y_col].max(), 2)], fontsize=8)
-    ax.set_xlabel('Y2O3 %', fontsize=8, labelpad=-23)
+    ax.set_xlabel('Y2O3 (%)', fontsize=8, labelpad=-23)
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
     ax.grid(axis='y', color='gray', alpha=1, ls='--')
 
@@ -112,7 +135,7 @@ def plot_ageinterp_panel(df, ax, color_label, color_map, bar_width=0.04, gap=0.0
     ##### age/SE bars...
     xstart = gap * 2
     for age, err in zip(ages, errors):
-        bar = Rectangle(xy=(xstart, age-err), width=bar_width, height=err*2, facecolor=color_map[color_label], edgecolor='k', linewidth=0.2, alpha=1)
+        bar = Rectangle(xy=(xstart, age-err), width=bar_width, height=err*2, facecolor=color_map[color_label], edgecolor='k', linewidth=0.35, alpha=1)
         ax.add_patch(bar)
         xstart += bar_width + gap
     
@@ -169,3 +192,70 @@ def cluster_stats(ages, se, two_sigma=True):
         "sigma_mean": sigma_mu_adj,
         "ci95_halfwidth": half_width
     }
+
+
+
+def horizontal_stack(ax, k_label, yval, counts_dict, count_color_dict, violin_arr):
+
+    x0 = 0
+    total = sum(counts_dict.values())
+
+    ax.text(x=0, y=yval, s=k_label, fontsize=7, weight='bold')
+
+    for tex, count in counts_dict.items():
+        x1 = count/total
+        count_bar = Rectangle(xy=(x0, yval+12), width=x1, height=-10, facecolor=count_color_dict[tex], linewidth=0.5, edgecolor='k')
+        ax.add_patch(count_bar)
+        x0 += x1
+    
+    ax2 = ax.twiny()
+    ax2.set_ylim(ax.get_ylim())
+    ax2.set_autoscale_on(False)
+    ax2.grid(False)
+    ax2.patch.set_alpha(0.0)
+    for s in ax2.spines.values():
+        s.set_visible(False)
+
+    # vmin = np.min(violin_arr)
+    vmax = np.max(violin_arr)
+    
+    ax2.boxplot(violin_arr, positions=[yval+19], vert=False,
+            widths=10, patch_artist=True,
+            boxprops=dict(facecolor='tab:blue', color='k', linewidth=0.5),
+            medianprops=dict(color='k', linewidth=0.5),
+            whiskerprops=dict(color='k', linewidth=0.5),
+            capprops=dict(color='k', linewidth=0.5), 
+            flierprops=dict(color='k', markersize=2, linewidth=0.25, markerfacecolor='k'))
+    
+    ax2.set_xlim(-0.1, vmax + 0.2)
+    ax2.set_xticks([])
+
+    ax.set_xlim(-0.1, 1.1)
+    ax.set_xticks([])
+    ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
+
+
+
+
+def kmeans_processing(df, k):
+
+    ages = df['age'].to_numpy().reshape(-1,1)
+    kmeans = KMeans(n_clusters=k, random_state=111, n_init='auto').fit(ages) 
+
+    # sort cluster centers
+    order = np.argsort(kmeans.cluster_centers_.ravel())
+
+    # re-label the cluster assignments
+    labels = kmeans.labels_
+    relabel = np.empty_like(order)
+    relabel[order] = np.arange(order.size)
+    df['labels'] = relabel[labels]
+
+    # reorder the centers too (optional)
+    kmeans.cluster_centers_ = kmeans.cluster_centers_[order]
+
+    # sort the df according to labels & error...
+    df.sort_values(['labels', 'error'], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+
+    return df
