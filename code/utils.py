@@ -54,7 +54,8 @@ def plot_samples_panel(df, ax, color_map_col, color_map, label_bool=True, timeli
     # adjust ax styling...
     ax.set_xlim(0, sample_max+0.001)
     ax.set_xticks([])
-    ax.set_ylim(timeline[0], timeline[1])
+    # ax.set_ylim(timeline[0], timeline[1])
+    ax.set_ylim(ax.get_ylim())
     ax.set_yticks(np.arange(timeline[0], timeline[1]+1, 10))
     ax.set_yticklabels([str(i) if i%20 == 0 else '' for i in np.arange(timeline[0], timeline[1]+1, 10)])
     ax.tick_params(axis='y', which='major', labelleft=label_bool)
@@ -95,6 +96,7 @@ def plot_kde_panel(df, ax, timeline=[210, 450]):
     ax.set_xlim(0, kde_max+0.001)                           # set x limits of twinx
     ax.set_xticks([])                                       # turn axes off
     # ax.set_ylim(timeline[0], timeline[1])
+    ax.set_ylim(ax.get_ylim())
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
     ax.grid(axis='y', color='gray', alpha=1, ls='--')
     ax.set_axis_off()
@@ -118,6 +120,7 @@ def plot_yttrium_panel(df, ax, y_col, y_symbology):
     ax.set_xticks([df[y_col].min(), df[y_col].max()])
     ax.set_xticklabels([round(df[y_col].min(), 2), round(df[y_col].max(), 2)], fontsize=8)
     ax.set_xlabel('Y2O3 (%)', fontsize=8, labelpad=-23)
+    ax.set_ylim(ax.get_ylim())
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
     ax.grid(axis='y', color='gray', alpha=1, ls='--')
 
@@ -132,23 +135,30 @@ def plot_ageinterp_panel(df, ax, color_label, color_map, bar_width=0.04, gap=0.0
     errors = df['error'].to_numpy()
 
 
-    ##### age/SE bars...
-    xstart = gap * 2
-    for age, err in zip(ages, errors):
-        bar = Rectangle(xy=(xstart, age-err), width=bar_width, height=err*2, facecolor=color_map[color_label], edgecolor='k', linewidth=0.35, alpha=1)
-        ax.add_patch(bar)
-        xstart += bar_width + gap
-    
-
     #### calculate weighted mean age...   
     stats = cluster_stats(ages, errors, two_sigma=False)
 
 
-    ##### plot weighted mean and CI ribbon...
+    ##### plot weighted mean CI ribbon (on bottom)...
     if stats['n'] >= 3:
         y0 = stats['mean'] - stats['ci95_halfwidth']
         y1 = stats['mean'] + stats['ci95_halfwidth']
-        ax.axhspan(y0, y1, xmin=0, xmax=1, facecolor=color_map[color_label], alpha=0.5, edgecolor='none')
+        ax.axhspan(y0, y1, xmin=0, xmax=1, facecolor=color_map[color_label], alpha=0.35, edgecolor='none')
+
+
+    ##### plot age/SE bars for each group...
+    xstart = gap * 2
+    for age, err in zip(ages, errors):
+        bar = Rectangle(xy=(xstart, age-err), width=bar_width, height=err*2, facecolor=color_map[color_label], edgecolor='k', linewidth=0.4)
+        ax.add_patch(bar)
+        xstart += bar_width + gap
+    
+
+    ##### plot weighted mean line...
+    # if stats['n'] >= 3:
+    #     y0 = stats['mean'] - stats['ci95_halfwidth']
+    #     y1 = stats['mean'] + stats['ci95_halfwidth']
+    #     ax.axhspan(y0, y1, xmin=0, xmax=1, facecolor=color_map[color_label], alpha=0.5, edgecolor='none')
     ax.axhline(y=stats['mean'], xmin=0, xmax=1, color='k', linewidth=1)
 
 
@@ -157,6 +167,7 @@ def plot_ageinterp_panel(df, ax, color_label, color_map, bar_width=0.04, gap=0.0
     ax.set_xticks([])
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
     ax.grid(axis='y', color='gray', alpha=1, ls='--')
+    ax.set_ylim(ax.get_ylim())
 
 
 
@@ -195,63 +206,132 @@ def cluster_stats(ages, se, two_sigma=True):
 
 
 
-def horizontal_stack(ax, k_label, yval, counts_dict, count_color_dict, violin_arr):
+# def horizontal_stack(ax, k_label, yval, counts_dict, count_color_dict, violin_arr):
+
+#     x0 = 0
+#     total = sum(counts_dict.values())
+
+#     ax.set_xlim(-0.1, 1.1)
+#     ax.set_xticks([])
+#     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
+#     ax.grid(False)
+
+#     ax.text(x=0, y=yval, s=k_label, fontsize=7, weight='bold')
+
+#     for tex, count in counts_dict.items():
+#         x1 = count/total
+#         count_bar = Rectangle(xy=(x0, yval+12), width=x1, height=-10, facecolor=count_color_dict[tex], linewidth=0.5, edgecolor='k')
+#         ax.add_patch(count_bar)
+#         x0 += x1
+    
+
+#     vmax = np.max(violin_arr)
+
+#     if not hasattr(ax, "_box_twin"):
+#         ax2 = ax.twiny()
+#         # ax2.set_ylim(ax.get_ylim())
+#         ax2.set_autoscale_on(False)
+#         ax2.grid(False)
+#         ax2.patch.set_alpha(0.0)
+#         for s in ax2.spines.values():
+#             s.set_visible(False)
+#         ax2.set_xticks([])
+#         ax._box_twin = ax2
+#     else:
+#         ax2 = ax._box_twin
+
+#     ax2.set_ylim(ax.get_ylim())
+
+    
+#     ax2.boxplot(violin_arr, positions=[yval+19], vert=False, widths=10, patch_artist=True, 
+#                 boxprops=dict(facecolor='tab:blue', color='k', linewidth=0.5), 
+#                 medianprops=dict(color='k', linewidth=0.5), 
+#                 whiskerprops=dict(color='k', linewidth=0.5), 
+#                 capprops=dict(color='k', linewidth=0.5), 
+#                 flierprops=dict(color='k', markersize=2, linewidth=0.25, markerfacecolor='k'))
+    
+#     ax2.set_xlim(-0.1, vmax + 0.2)
+    # ax2.set_xticks([])
+
+    # ax.set_ylim(ax.get_ylim())
+
+def horizontal_stack(ax, k_label, yval, counts_dict, count_color_dict, violin_arr, violin_max):
 
     x0 = 0
     total = sum(counts_dict.values())
 
-    ax.text(x=0, y=yval, s=k_label, fontsize=7, weight='bold')
-
-    for tex, count in counts_dict.items():
-        x1 = count/total
-        count_bar = Rectangle(xy=(x0, yval+12), width=x1, height=-10, facecolor=count_color_dict[tex], linewidth=0.5, edgecolor='k')
-        ax.add_patch(count_bar)
-        x0 += x1
-    
-    ax2 = ax.twiny()
-    ax2.set_ylim(ax.get_ylim())
-    ax2.set_autoscale_on(False)
-    ax2.grid(False)
-    ax2.patch.set_alpha(0.0)
-    for s in ax2.spines.values():
-        s.set_visible(False)
-
-    # vmin = np.min(violin_arr)
-    vmax = np.max(violin_arr)
-    
-    ax2.boxplot(violin_arr, positions=[yval+19], vert=False,
-            widths=10, patch_artist=True,
-            boxprops=dict(facecolor='tab:blue', color='k', linewidth=0.5),
-            medianprops=dict(color='k', linewidth=0.5),
-            whiskerprops=dict(color='k', linewidth=0.5),
-            capprops=dict(color='k', linewidth=0.5), 
-            flierprops=dict(color='k', markersize=2, linewidth=0.25, markerfacecolor='k'))
-    
-    ax2.set_xlim(-0.1, vmax + 0.2)
-    ax2.set_xticks([])
-
     ax.set_xlim(-0.1, 1.1)
     ax.set_xticks([])
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
+    ax.grid(False)
+
+    ax.text(x=0, y=yval, s=k_label, fontsize=7, weight='bold')
+
+    for tex, count in counts_dict.items():
+        x1 = count / total
+        count_bar = Rectangle(
+            xy=(x0, yval+12), width=x1, height=-10,
+            facecolor=count_color_dict[tex], linewidth=0.5, edgecolor='k'
+        )
+        ax.add_patch(count_bar)
+        x0 += x1
 
 
 
 
-def kmeans_processing(df, k):
+    if not hasattr(ax, "_box_overlay"):
+        box_ax = ax.figure.add_axes(ax.get_position(), frameon=False)  # new axes, no sharing
+        box_ax.set_yticks([]); box_ax.set_xticks([])
+        box_ax.patch.set_alpha(0.0)
+        box_ax.set_zorder(ax.get_zorder() + 1)
+        ax._box_overlay = box_ax
+    else:
+        box_ax = ax._box_overlay
+        # keep overlay aligned with parent in case layout updated
+        box_ax.set_position(ax.get_position())
+
+    box_ax.set_axis_off()
+
+    # keep overlay in sync with parent limits but NOT shared
+    box_ax.set_ylim(ax.get_ylim())
+    # box_ax.set_yticks([])
+    # box_ax.set_xticks([])
+    box_ax.set_xlim(-0.1, violin_max+0.2)
+
+    # (optional) clamp to stay within y-lims so it never nudges bounds visually
+    ylo, yhi = box_ax.get_ylim()
+    pos = max(min(yval + 19, max(ylo, yhi) - 1), min(ylo, yhi) + 1)
+
+    # draw the boxplot on the overlay axis
+    box_ax.boxplot(
+        violin_arr, positions=[pos], vert=False, widths=10, patch_artist=True,
+        boxprops=dict(facecolor='tab:blue', color='k', linewidth=0.5),
+        medianprops=dict(color='k', linewidth=0.5),
+        whiskerprops=dict(color='k', linewidth=0.5),
+        capprops=dict(color='k', linewidth=0.5),
+        flierprops=dict(color='k', markersize=2, linewidth=0.25, markerfacecolor='k')
+    )
+    
+
+
+
+
+def kmeans_processing(df, k, weights=False):
 
     ages = df['age'].to_numpy().reshape(-1,1)
-    kmeans = KMeans(n_clusters=k, random_state=111, n_init='auto').fit(ages) 
+    if not weights:
+        kmeans = KMeans(n_clusters=k, random_state=111, n_init='auto').fit(ages) 
+    else:
+        errors = df['error'].to_numpy().reshape(-1,1)
+        weights = 1/errors**2
+        kmeans = KMeans(n_clusters=k, random_state=111, n_init='auto').fit(ages, sample_weight=weights) 
 
-    # sort cluster centers
+    # sort cluster centers numerically...
     order = np.argsort(kmeans.cluster_centers_.ravel())
-
-    # re-label the cluster assignments
     labels = kmeans.labels_
     relabel = np.empty_like(order)
     relabel[order] = np.arange(order.size)
     df['labels'] = relabel[labels]
-
-    # reorder the centers too (optional)
     kmeans.cluster_centers_ = kmeans.cluster_centers_[order]
 
     # sort the df according to labels & error...
