@@ -23,11 +23,16 @@ age_group_colors = {0:'#f25117',
                     3:'#72a2c0', 
                     4:'#1d65a6', 
                     5:'#192e5b',
+                    6:'k',
+                    7:'red',
+                    8:'blue',
+                    9:'darkred',
+                    10:'green',
                     -1:'#b1b8bc'}
 
 gap = 0.3
 bar_width = 0.4
-
+timeline=[210, 450]
 
 
 def plot_samples_panel(df, ax, color_map_col, color_map, label_bool=True, timeline=[210, 450], ylabel='Age (Ma)'):
@@ -54,7 +59,7 @@ def plot_samples_panel(df, ax, color_map_col, color_map, label_bool=True, timeli
     # adjust ax styling...
     ax.set_xlim(0, sample_max+0.001)
     ax.set_xticks([])
-    # ax.set_ylim(timeline[0], timeline[1])
+    ax.set_ylim(timeline[0], timeline[1])
     ax.set_ylim(ax.get_ylim())
     ax.set_yticks(np.arange(timeline[0], timeline[1]+1, 10))
     ax.set_yticklabels([str(i) if i%20 == 0 else '' for i in np.arange(timeline[0], timeline[1]+1, 10)])
@@ -64,6 +69,8 @@ def plot_samples_panel(df, ax, color_map_col, color_map, label_bool=True, timeli
     else:
         ax.set_ylabel(None)
     ax.grid(which='major', axis='y', color='gray', alpha=1, ls="--")
+
+    # ax.set_title('Density')
 
     return sample_max
 
@@ -96,6 +103,9 @@ def plot_kde_panel(df, ax, timeline=[210, 450]):
     ax.set_xlim(0, kde_max+0.001)                           # set x limits of twinx
     ax.set_xticks([])                                       # turn axes off
     # ax.set_ylim(timeline[0], timeline[1])
+
+    
+
     ax.set_ylim(ax.get_ylim())
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
     ax.grid(axis='y', color='gray', alpha=1, ls='--')
@@ -120,6 +130,7 @@ def plot_yttrium_panel(df, ax, y_col, y_symbology):
     ax.set_xticks([df[y_col].min(), df[y_col].max()])
     ax.set_xticklabels([round(df[y_col].min(), 2), round(df[y_col].max(), 2)], fontsize=8)
     ax.set_xlabel('Y2O3 (%)', fontsize=8, labelpad=-23)
+    # ax.set_title('Y2O3 (Wt. %)')
     ax.set_ylim(ax.get_ylim())
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
     ax.grid(axis='y', color='gray', alpha=1, ls='--')
@@ -155,20 +166,25 @@ def plot_ageinterp_panel(df, ax, color_label, color_map, bar_width=0.04, gap=0.0
     
 
     ##### plot weighted mean line...
-    # if stats['n'] >= 3:
+    if stats['n'] >= 3:
     #     y0 = stats['mean'] - stats['ci95_halfwidth']
     #     y1 = stats['mean'] + stats['ci95_halfwidth']
     #     ax.axhspan(y0, y1, xmin=0, xmax=1, facecolor=color_map[color_label], alpha=0.5, edgecolor='none')
-    ax.axhline(y=stats['mean'], xmin=0, xmax=1, color='k', linewidth=1)
+        ax.axhline(y=stats['mean'], xmin=0, xmax=1, color='k', linewidth=1)
 
 
     ##### stylize axis...
     ax.text(0.5, 0.985, 'Interpretation', style='italic', transform=ax.transAxes, fontsize=8, ha='center', va='top')
+
+    # ax.set_title('Weighted Mean Ages')
+
     ax.set_xticks([])
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
     ax.grid(axis='y', color='gray', alpha=1, ls='--')
     ax.set_ylim(ax.get_ylim())
 
+    if stats['n'] > 3:
+        return stats
 
 
 
@@ -206,54 +222,6 @@ def cluster_stats(ages, se, two_sigma=True):
 
 
 
-# def horizontal_stack(ax, k_label, yval, counts_dict, count_color_dict, violin_arr):
-
-#     x0 = 0
-#     total = sum(counts_dict.values())
-
-#     ax.set_xlim(-0.1, 1.1)
-#     ax.set_xticks([])
-#     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
-#     ax.grid(False)
-
-#     ax.text(x=0, y=yval, s=k_label, fontsize=7, weight='bold')
-
-#     for tex, count in counts_dict.items():
-#         x1 = count/total
-#         count_bar = Rectangle(xy=(x0, yval+12), width=x1, height=-10, facecolor=count_color_dict[tex], linewidth=0.5, edgecolor='k')
-#         ax.add_patch(count_bar)
-#         x0 += x1
-    
-
-#     vmax = np.max(violin_arr)
-
-#     if not hasattr(ax, "_box_twin"):
-#         ax2 = ax.twiny()
-#         # ax2.set_ylim(ax.get_ylim())
-#         ax2.set_autoscale_on(False)
-#         ax2.grid(False)
-#         ax2.patch.set_alpha(0.0)
-#         for s in ax2.spines.values():
-#             s.set_visible(False)
-#         ax2.set_xticks([])
-#         ax._box_twin = ax2
-#     else:
-#         ax2 = ax._box_twin
-
-#     ax2.set_ylim(ax.get_ylim())
-
-    
-#     ax2.boxplot(violin_arr, positions=[yval+19], vert=False, widths=10, patch_artist=True, 
-#                 boxprops=dict(facecolor='tab:blue', color='k', linewidth=0.5), 
-#                 medianprops=dict(color='k', linewidth=0.5), 
-#                 whiskerprops=dict(color='k', linewidth=0.5), 
-#                 capprops=dict(color='k', linewidth=0.5), 
-#                 flierprops=dict(color='k', markersize=2, linewidth=0.25, markerfacecolor='k'))
-    
-#     ax2.set_xlim(-0.1, vmax + 0.2)
-    # ax2.set_xticks([])
-
-    # ax.set_ylim(ax.get_ylim())
 
 def horizontal_stack(ax, k_label, yval, counts_dict, count_color_dict, violin_arr, violin_max):
 
