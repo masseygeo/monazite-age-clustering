@@ -10,7 +10,7 @@ from sklearn.cluster import DBSCAN
 
 
 
-
+##### GLOBAL DICTIONARY SYMBOLOGIES
 # color mappeer for monazite zoning
 texture_colors = {'core': '#239BA7', 
                   'overgrowth': '#ECECBB', 
@@ -44,13 +44,9 @@ age_group_colors = {0:'#ff595e',
                     10:'#00202e',
                     -1:'#eaeaea'}
 
-# settings to determine
-gap = 0.3
-bar_width = 0.4
-timeline=[210, 450]
 
 
-def plot_samples_panel(df, ax, color_col, color_map, label_bool=True, timeline=timeline, y_label='Age (Ma)'):
+def plot_samples_panel(df, ax, color_col, color_map, label_bool=True, timeline=[210, 450], y_label='Age (Ma)'):
     """
     Plot probability density curves for individual monazite samples on a given axis.
 
@@ -65,8 +61,8 @@ def plot_samples_panel(df, ax, color_col, color_map, label_bool=True, timeline=t
         color_col (str): Name of the column in `df` used to determine colors.
         color_map (dict): Mapping of values from `color_col` to colors.
         label_bool (bool, optional): Whether to display y-axis labels. Defaults to True.
-        timeline (list[int], optional): Lower and upper bounds of the age axis (Ma).
-            Defaults to [210, 450].
+        timeline (list[int, int], optional): (min_age, max_age) for plotting grid.
+            Defaults to (210, 450).
         ylabel (str, optional): Y-axis label text. Defaults to "Age (Ma)".
 
     Returns:
@@ -113,7 +109,7 @@ def plot_samples_panel(df, ax, color_col, color_map, label_bool=True, timeline=t
     
 
 
-def plot_kde_panel(df, ax, timeline=timeline):
+def plot_kde_panel(df, ax, timeline=[210, 450]):
     """
     Plot standard and error-weighted KDEs on a twin-x axis that shares the y-axis (age).
 
@@ -129,8 +125,8 @@ def plot_kde_panel(df, ax, timeline=timeline):
             - 'age' (float): Sample ages.
             - 'error' (float): Sample age errors (1 sigma SE).
         ax (matplotlib.axes.Axes): A twin-x axis (e.g., created by `ax_main.twiny()`).
-        timeline (list[int], optional): Lower and upper bounds of the age axis (Ma).
-            Defaults to [210, 450].
+        timeline (list[int, int], optional): (min_age, max_age) for plotting grid.
+            Defaults to (210, 450).
 
     Returns:
         float: The maximum density value across both KDE curves (for scaling/comparison).
@@ -217,19 +213,19 @@ def plot_yttrium_panel(df, ax, y_col='Y2O3', y_color_col='garnet'):
 
 
 
-# gap = 0.3
-# bar_width = 0.4
-def plot_ageinterp_panel(df, ax, color_col, color_map, bar_width=bar_width, gap=gap, ci='2sigma'):
+
+def plot_ageinterp_panel(df, ax, color_col, color_map, bar_width=0.4, gap=0.3, ci='2sigma'):
     """
     Plot weighted mean age metrics (individual ages, errors, and MSWD).
 
-    The function:
-      1. Computes the weighted mean age and confidence interval for the group.
-      2. If at least 3 ages are present, plots a semi-transparent 95% CI ribbon
-         around the mean at the bottom of the axis.
-      3. Plots vertical bars for each individual sample age with +/-1 sigma error.
-      4. If at least 3 ages are present, overlays a horizontal line at the
-         weighted mean age.
+    If at least three ages are present, this function:
+        1. Computes the weighted mean age and confidence interval for the group.
+        2. Plots a semi-transparent 95% CI ribbon around the mean.
+        3. Plots vertical bars for each individual sample age with +/-1 sigma error, colored by group layer (color_col).
+        3. Overlays a horizontal line at the weighted mean age.
+
+    If less than three ages are present, this function:
+        1. Plots gray vertical bars for each individual sample age with +/-1 sigma error. 
 
     Args:
         df (pandas.DataFrame): Input DataFrame containing:
@@ -240,22 +236,23 @@ def plot_ageinterp_panel(df, ax, color_col, color_map, bar_width=bar_width, gap=
             determine plotting color.
         color_map (dict): Mapping of categories to matplotlib colors.
         bar_width (float, optional): Width of the individual age bars.
-            Defaults to global `bar_width`.
-        gap (float, optional): Horizontal gap between bars. Defaults to global `gap`.
+            Defaults to global 0.4.
+        gap (float, optional): Horizontal gap between bars. Defaults to 0.3.
         ci (str, optional): Confidence interval to use for weighted mean ('2sigma' or '95%'). Defaults to '2sigma'.
 
     Returns:
         dict or None: Weighted mean statistics dictionary (from `cluster_stats`) if
-        the group has more than 3 ages; otherwise, returns None.
+        the group has 3 or more ages; otherwise, returns None.
     """
 
     # pre-proceessing...
-    df = df.sort_values('age').copy()   # sort df by age (ascending)
-    ages = df['age'].to_numpy()         # extract age array
-    errors = df['error'].to_numpy()     # extract error array (1 sigma SE)
+    df = df.sort_values('age').copy()                 # sort df by age (ascending)
+    color_col = color_col if len(df) >= 3 else -1     # enforce gray for undersized groups
+    ages = df['age'].to_numpy()                       # extract age array
+    errors = df['error'].to_numpy()                   # extract error array (1 sigma SE)
 
     # calculate weighted mean age and stats...   
-    stats = cluster_stats(ages, errors, ci='2sigma')
+    stats = cluster_stats(ages, errors, ci=ci)
 
     # plot weighted mean CI ribbon for groups with at least 3 ages (on bottom)...
     if stats['n'] >= 3:
@@ -280,7 +277,7 @@ def plot_ageinterp_panel(df, ax, color_col, color_map, bar_width=bar_width, gap=
     ax.grid(axis='y', color='gray', alpha=1, ls='--')                         # show grid lines
     ax.set_ylim(ax.get_ylim())                                                # explicitly set y axis limits from parent
 
-    if stats['n'] > 3:
+    if stats['n'] >= 3:
         return stats
 
 
@@ -350,178 +347,310 @@ def cluster_stats(ages, se, ci='2sigma'):
 
 
 
-def horizontal_stack(ax, k_label, yval, counts_dict, count_color_dict, violin_arr, violin_max):
+def horizontal_stack(ax, k_label, y_pos, counts_dict, color_map, second_arr):
+    """
+    Render a label, a 0-1 stacked percentage bar, and an overlaid horizontal boxplot. This overlay approach avoids the small pixel misalignments seen with `twiny()`.
 
-    x0 = 0
-    total = sum(counts_dict.values())
+    This draws two visual layers that share the same y-space:
+    1. On the base axis `ax` (x-scale = 0-1), it places a label at `y_pos`
+        and a stacked bar just below it whose segment widths are the category
+        percentages from `counts_dict` and colors from `color_map`.
+    2. On a transparent overlay axis (created once as `ax._box_overlay` and
+        reused), it draws a horizontal boxplot of `second_arr` using an independent
+        x-scale (e.g., Y2O3 values) while keeping y aligned with the base axis.
+    
+    Args:
+        ax (matplotlib.axes.Axes): Parent axis on which the stacked bar and label
+            are drawn. An overlay axis is created/reused and stored as `ax._box_overlay`.
+            The base axis x-limits are set to [-0.1, 1.1] and x-ticks are hidden.
+        k_label (int): Zero-based cluster index; displayed as "Cluster {k_label+1}".
+        y_pos (float): Baseline y position (in data units) for the label. The stacked
+            bar is drawn from y ≈ `y_pos+12` down to y ≈ `y_pos+2`. The boxplot is
+            centered above them at y ≈ `y_pos+19` (clamped to the panel's y-limits).
+        counts_dict (Mapping[str, int]): Mapping of category:count used to compute
+            segment percentages for the stacked bar (width = count/total).
+        color_map (Mapping[str, color]): Mapping of category:matplotlib color used
+            for the stacked bar segments.
+        second_arr (array-like of float): Continuous values to summarize with a
+            horizontal boxplot on the overlay axis (e.g., Y2O3).
 
-    ax.set_xlim(-0.1, 1.1)
-    ax.set_xticks([])
-    ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
-    ax.grid(False)
+    Returns:
+        None: The function modifies `ax` (and its cached overlay axis) in place.
+    """
 
-    ax.text(x=0, y=yval, s=k_label, fontsize=7, weight='bold')
+    ##### stacked bar chart
+    # format axis 1 for stacked bar chart...
+    ax.set_xlim(-0.1, 1.1)                                                    # set limits
+    ax.set_xticks([])                                                         # remove x ticks
+    ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)   # minimize tick marks
+    ax.grid(False)                                                            # turn off grid
 
+    # plot cluster name at y position...
+    cluster_label = f"Cluster {k_label+1}"                                # create string label (group+1 not start at 0)
+    ax.text(x=0, y=y_pos, s=cluster_label, fontsize=7, weight='bold')     # plot text
+
+    # plot stacked bar chart...
+    total = sum(counts_dict.values())                                      # sum total samples in dictionary
+    x0 = 0                                                                 # start position of stacked bar
+    
+    # iterate through dictionary...
     for tex, count in counts_dict.items():
-        x1 = count / total
-        count_bar = Rectangle(
-            xy=(x0, yval+12), width=x1, height=-10,
-            facecolor=count_color_dict[tex], linewidth=0.5, edgecolor='k'
-        )
-        ax.add_patch(count_bar)
-        x0 += x1
+        x1 = count / total                                                 # end position of bar part (percent of total)
+        count_bar = Rectangle(xy=(x0, y_pos+12), width=x1, height=-10,     # lower left start position, horizontal width, vertical height
+                              facecolor=color_map[tex],                    # map to dictionary for clusters/components colors
+                              linewidth=0.5, edgecolor='k')                # outline
+        ax.add_patch(count_bar)                                            # add bar part below text
+        x0 += x1                                                           # update start position for next bar part
 
 
-
-
+    ##### setup axis for boxplot
+    # create transparent overlay on top of ax...
+    # NOTE: for some reason using ax.twiny was creating slight mismatch on y axis (annoying but not signficant) - this fixes it
+    # setup custom attribute to ax first time...
     if not hasattr(ax, "_box_overlay"):
-        box_ax = ax.figure.add_axes(ax.get_position(), frameon=False)  # new axes, no sharing
-        box_ax.set_yticks([]); box_ax.set_xticks([])
-        box_ax.patch.set_alpha(0.0)
-        box_ax.set_zorder(ax.get_zorder() + 1)
-        ax._box_overlay = box_ax
+        box_ax = ax.figure.add_axes(ax.get_position(), frameon=False)   # same rectangle as ax (no sharing)
+        box_ax.set_yticks([])                                           # turn off y ticks
+        box_ax.set_xticks([])                                           # turn off x ticks
+        box_ax.patch.set_alpha(0.0)                                     # make overlay transparent (important)
+        box_ax.set_zorder(ax.get_zorder() + 1)                          # draw on top of ax
+        ax._box_overlay = box_ax                                        # stash for re-use
+    
+    # update custom attribute with new positioning on the new parent ax...
     else:
         box_ax = ax._box_overlay
-        # keep overlay aligned with parent in case layout updated
-        box_ax.set_position(ax.get_position())
+        box_ax.set_position(ax.get_position())                          # keep aligned if layout moved ax
 
+    # hides spines/ticks/labels; the patch stays, but we set it transparent above
     box_ax.set_axis_off()
 
     # keep overlay in sync with parent limits but NOT shared
-    box_ax.set_ylim(ax.get_ylim())
-    # box_ax.set_yticks([])
-    # box_ax.set_xticks([])
-    box_ax.set_xlim(-0.1, violin_max+0.2)
+    box_ax.set_ylim(ax.get_ylim())                     # same y-space as ax parent
+    box_ax.set_xlim(-0.1, np.max(second_arr) + 0.2)    # different x-space
 
-    # (optional) clamp to stay within y-lims so it never nudges bounds visually
+    # clamp to stay within y-lims...
     ylo, yhi = box_ax.get_ylim()
-    pos = max(min(yval + 19, max(ylo, yhi) - 1), min(ylo, yhi) + 1)
+    pos = max(min(y_pos + 19, max(ylo, yhi) - 1), min(ylo, yhi) + 1)
+
+
+    ##### boxplot
+    # normalize second_arr to [0, 1]
+    # scaled_arr = (second_arr - np.min(second_arr)) / (np.max(second_arr) - np.min(second_arr))
+
+    if len(second_arr) == 1:
+        scaled_arr = second_arr.astype(float)   # keep actual value
+        # box_ax.set_xlim(second_arr[0] - 0.5, second_arr[0] + 0.5)  # give it a little space
+    else:
+        rng = np.ptp(second_arr)
+        scaled_arr = (second_arr - np.min(second_arr)) / rng
+        # box_ax.set_xlim(0, 1)
 
     # draw the boxplot on the overlay axis
-    box_ax.boxplot(
-        violin_arr, positions=[pos], vert=False, widths=10, patch_artist=True,
+    # box_ax.boxplot(second_arr, positions=[pos], vert=False, widths=10, patch_artist=True,
+    #     boxprops=dict(facecolor='tab:blue', color='k', linewidth=0.5),
+    #     medianprops=dict(color='k', linewidth=0.5),
+    #     whiskerprops=dict(color='k', linewidth=0.5),
+    #     capprops=dict(color='k', linewidth=0.5),
+    #     flierprops=dict(color='k', markersize=2, linewidth=0.25, markerfacecolor='k')
+    # )
+    box_ax.boxplot(scaled_arr, positions=[pos], vert=False, widths=10, patch_artist=True,
         boxprops=dict(facecolor='tab:blue', color='k', linewidth=0.5),
         medianprops=dict(color='k', linewidth=0.5),
         whiskerprops=dict(color='k', linewidth=0.5),
         capprops=dict(color='k', linewidth=0.5),
         flierprops=dict(color='k', markersize=2, linewidth=0.25, markerfacecolor='k')
     )
+
+    # set overlay axis to 0–1 for x, but keep same y-lims as parent
+    box_ax.set_xlim(-0.1, 1.1)
+    box_ax.set_ylim(ax.get_ylim())
     
 
 
 
 
-def kmeans_processing(df, k, weights=False):
+def kmeans_processing(df, k, random_state=111):
+    """
+    Cluster ages using KMeans and remap labels in chronological order.
 
+    This function applies KMeans clustering to the 'age' column of the DataFrame, remaps cluster labels so that younger mean ages have lower
+    labels, and sorts the DataFrame by cluster label and error. The index is reset before returning.
+
+    Args:
+        df (pandas.DataFrame): Input DataFrame containing:
+            - 'age' (float): Sample ages.
+            - 'error' (float): Sample age errors (1 sigma SE).
+        k (int): Number of clusters to compute.
+        random_state (int, optional): Random seed for reproducibility. 
+            Defaults to 111.
+
+    Returns:
+        pandas.DataFrame: DataFrame with an added 'labels' column (int)
+        for chronological cluster assignment, sorted by cluster label
+        and error, with index reset.
+    """
+
+    # extract age array
     ages = df['age'].to_numpy().reshape(-1,1)
-    if not weights:
-        kmeans = KMeans(n_clusters=k, random_state=111, n_init='auto').fit(ages) 
-    else:
-        errors = df['error'].to_numpy().reshape(-1,1)
-        weights = 1/errors**2
-        kmeans = KMeans(n_clusters=k, random_state=111, n_init='auto').fit(ages, sample_weight=weights) 
 
-    # sort cluster centers numerically...
-    order = np.argsort(kmeans.cluster_centers_.ravel())
-    labels = kmeans.labels_
-    relabel = np.empty_like(order)
-    relabel[order] = np.arange(order.size)
-    df['labels'] = relabel[labels]
-    kmeans.cluster_centers_ = kmeans.cluster_centers_[order]
+    # fit K-means model
+    kmeans = KMeans(n_clusters=k, random_state=random_state, n_init='auto').fit(ages) 
 
-    # sort the df according to labels & error...
-    df.sort_values(['labels', 'error'], inplace=True)
-    df.reset_index(drop=True, inplace=True)
+    # update df...
+    df['labels'] = kmeans.labels_                                 # attach cluster labels
+    means = df.groupby('labels')['age'].mean().sort_values()      # calculate cluster means and sort (ascending)
+    remap = {old: new for new, old in enumerate(means.index)}     # dict to re-map labels in chronological order
+    df['labels'] = df['labels'].map(remap).astype(int)            # update new cluster labels
+    df.sort_values(['labels', 'error'], inplace=True)             # sort by cluster labels then errors
+    df.reset_index(drop=True, inplace=True)                       # reset df index
 
     return df
 
 
 
-def gmm_processing(df, k, use_weights=False, age_min=210, age_max=450, n_pts=1000):
+
+
+def gmm_processing(df, k, random_state=111, timeline=[210, 450]):
+    """Cluster ages with a Gaussian Mixture, remap labels by mean age, and sort the DataFrame.
+
+    Args:
+        df (pandas.DataFrame): Input DataFrame containing:
+            - 'age' (float): Sample ages.
+            - 'error' (float): Sample age errors (1 sigma SE).
+        k (int): Number of mixture components.
+        random_state (int, optional): Seed for reproducibility. Defaults to 111.
+        timeline (list[int, int], optional): (min_age, max_age) for plotting grid.
+            Defaults to (210, 450).
+
+    Returns:
+        tuple:
+            pandas.DataFrame: With chronological 'labels' (0 = youngest), sorted by
+                ['labels', 'error'] and index reset.
+            list[np.ndarray]: Weighted component PDFs evaluated on the plotting grid.
+            np.ndarray: Plotting grid (ages) used to evaluate PDFs.
+            np.ndarray: Mixture PDF evaluated on the plotting grid.
+    """
+
+    ##### GMM MODEL
+    # extract age array
     ages = df['age'].to_numpy().reshape(-1, 1)
 
-    if use_weights:
-        errors = df['error'].to_numpy().reshape(-1, 1)
-        sample_wts = (1.0 / (errors**2)).ravel()
-        gmm = GaussianMixture(n_components=k, covariance_type="full",
-                              n_init=10, random_state=111).fit(ages, sample_weight=sample_wts)
-    else:
-        gmm = GaussianMixture(n_components=k, covariance_type="full",
-                              n_init=10, random_state=111).fit(ages)
+    # fit GMM model
+    gmm = GaussianMixture(n_components=k, covariance_type="full", n_init=10, random_state=random_state).fit(ages)
 
-    # Extract params
-    means = gmm.means_.ravel()                        # (k,)
-    stds  = np.sqrt(gmm.covariances_.reshape(-1)).ravel()  # (k,)
-    weights = gmm.weights_.ravel()                    # (k,)
+    # extract fitted component parameters...
+    means = gmm.means_.ravel()                                               # means of each component
+    stds  = np.sqrt(gmm.covariances_.reshape(-1)).ravel()                    # standard deviations of each component
+    weights = gmm.weights_.ravel()                                           # weights of each component
+    order = np.argsort(means)                                                # get order of means
+    means, stds, weights = means[order], stds[order], weights[order]         # re-order information
 
-    # Order by mean (young→old)
-    order = np.argsort(means)
-    means, stds, weights = means[order], stds[order], weights[order]
+    # responsibilities & labels mapped to re-ordered components...
+    resp = gmm.predict_proba(ages)[:, order]                                 # sample responsibilities mapped to new labels; [samp., comp.]
+    labels = resp.argmax(axis=1)                                             # final labels assigned to maximum component responsibility
 
-    # Build timeline for plotting
-    timeline = np.linspace(age_min, age_max, n_pts)
-
-    # Component PDFs (weighted)
-    stds_plot = np.clip(stds, 0.5, None)  # plotting-only guard
-    components = [w * norm.pdf(timeline, loc=mu, scale=sd)
-                  for mu, sd, w in zip(means, stds_plot, weights)]
-
-    # Responsibilities & labels mapped to ordered components
-    resp = gmm.predict_proba(ages)[:, order]
-    labels = resp.argmax(axis=1)
-
-    df = df.copy()
+    # update df...
     df['labels'] = labels
     df.sort_values(['labels', 'error'], inplace=True)
     df.reset_index(drop=True, inplace=True)
 
-    # Optional: return total mixture curve for convenience
-    mixture = np.sum(components, axis=0)
 
-    return df, components, timeline, mixture
+    ##### PLOT PRODUCTS
+    # build timeline for plotting
+    t = np.linspace(timeline[0], timeline[1], 1000)
+
+    # get weighted component PDFs...
+    stds_plot = np.clip(stds, 0.5, None)                               # plotting-only guard against extremely thin curve
+    components = [w * norm.pdf(timeline, loc=mu, scale=sd)             # calculate PDFs and keep in list
+                  for mu, sd, w in zip(means, stds_plot, weights)]    
+    mixture = np.sum(components, axis=0)                               # total mixture curve
+
+    return df, components, t, mixture
 
 
 
 
-def plot_components_panel(ax, components, timeline, mixture, color_dict):
+def plot_components_panel(ax, x_components, y_timeline):
+    """Plot GMM component density curves against age on a twin x-axis.
 
-    for idx, c in enumerate(components):
-        # ax.plot(c, timeline, color=color_dict[idx], linewidth=2.0, linestyle='--')
-        ax.plot(c, timeline, color='k', linewidth=1.5, linestyle='--')
+    Plots each component's density (x) versus age (y) on the provided Matplotlib Axes (typically created via ``ax.twiny()``). Styles the
+    panel to be annotation-like (no ticks/axis frame).
 
-    ax.set_xlim(0, np.max(components))
-    ax.set_xticks([])
-    ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)
-    ax.grid(False)
-    ax.set_axis_off()
+    Args:
+        ax (matplotlib.axes.Axes): Target axes (usually ``twiny()`` of a main axis).
+        x_components (Sequence[np.ndarray]): Iterable of 1D arrays, each the
+            density values for a single GMM component, sampled along ``y_timeline``.
+            All arrays must be the same length as ``y_timeline``.
+        y_timeline (np.ndarray): 1D array of ages (e.g., Ma) corresponding to
+            each column of ``x_components``.
+
+    Returns:
+        matplotlib.axes.Axes: The input axes after plotting and styling.
+    """
+
+    # plot age vs. component density curves...
+    for _, c in enumerate(x_components):
+        ax.plot(c, y_timeline, color='k', linewidth=1.5, linestyle='--')
+
+    # stylize axes...
+    ax.set_xlim(0, np.max(x_components))                                       # set x limits
+    ax.set_xticks([])                                                          # turn off x tick marks
+    ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)    # minimize y tick marks
+    ax.grid(False)                                                             # explicitly turn off grid lines
+    ax.set_axis_off()                                                          # turn off axis lines
 
 
 
 
 def dbscan_processing(df, eps, min_samples):
+    """
+    Cluster ages using DBSCAN and remap labels chronologically.
+
+    Applies DBSCAN to the 'age' column of the input DataFrame, assigns cluster labels, and remaps them in chronological order based on
+    mean age (youngest cluster = 0, oldest cluster = K-1). Noise points (-1 from DBSCAN) are temporarily mapped to the end for sorting, then
+    restored to -1 so they appear last in the sorted DataFrame.
+
+    Args:
+        df (pandas.DataFrame): Input DataFrame containing:
+            - 'age' (float): Sample ages.
+            - 'error' (float): Sample age errors (1 sigma SE).
+        eps (float): The DBSCAN neighborhood radius.
+        min_samples (int): Minimum number of samples required in a 
+            neighborhood to form a core point.
+
+    Returns:
+        pandas.DataFrame: DataFrame with a new column:
+            - 'labels' (int): chronological cluster assignments 
+              (0 = youngest, K-1 = oldest, -1 = noise).
+        The DataFrame is sorted by label (with noise last) and then by
+        'error', with the index reset.
+    """
+
+    ##### DBSCAN MODEL
+    # extract age array
     ages = df['age'].to_numpy().reshape(-1, 1)
 
+    # fit DBSCAN model
     dbs = DBSCAN(eps=eps, min_samples=min_samples).fit(ages)
-    df = df.copy()  # avoid mutating caller's df
+
+
+    ##### UPDATE DF...
+    # attach cluster labels
     df['labels'] = dbs.labels_
 
-    # 1) Mean age per *cluster* (exclude noise = -1)
+    # calculate mean age per cluster (exclude noise = -1)
     means = (df.loc[df['labels'] != -1].groupby('labels')['age'].mean().sort_values())
 
-    # 3) Build mapping old -> new (0..K-1) in ascending mean age
-    remap = {old_label: new_idx for new_idx, old_label in enumerate(means.index)}
-    K = len(remap)
+    # calculate total number of real clusters (not noise)
+    K = len(means)
 
-    # Apply mapping; keep noise as -1
-    df['labels'] = df['labels'].map(remap).fillna(-1).astype(int)
+    # build mapper between original and new labels...
+    remap = {old: new for new, old in enumerate(means.index)}    # map to real clusters
+    remap[-1] = K                                                # map to noise (highest value)
+    df['labels'] = df['labels'].map(remap).astype(int)           # re-map labels & keep noise as -1
 
-    # (Optional) group mean (after relabel) if you still want it
-    # df['mean age'] = df.groupby('labels')['age'].transform('mean')
-
-    # 4) Sort with noise (-1) last, then by error (or age if you prefer)
-    sort_key = np.where(df['labels'] == -1, K, df['labels'])
-    df = df.iloc[np.lexsort((df.get('error', 0), sort_key))].reset_index(drop=True)
-
-    df = df.sort_values(['labels', 'error'])
+    df.sort_values(['labels', 'error'], inplace=True)            # sort by label order (ascending) and then error
+    df.reset_index(drop=True, inplace=True)                      # reset index
+    df.loc[df['labels']==K, 'labels'] = -1                       # replace noise back with -1
 
     return df
+
