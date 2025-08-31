@@ -72,6 +72,10 @@ def plot_samples_panel(df, ax, color_col, color_map, label_bool=True, timeline=[
     
     # initialize sample_max to get maximum density
     sample_max = 0.0
+
+    # # copy df & add temporary count column for color_col size (i.e., number of samples in cluster group)
+    # df = df.copy()
+    # df['_group_n'] = df.groupby(color_col)[color_col].transform('size')
     
     # iterate through samples in df...
     for _, row in df.iterrows():
@@ -85,13 +89,16 @@ def plot_samples_panel(df, ax, color_col, color_map, label_bool=True, timeline=[
         sample_max = max(sample_max, density.max())                 # update sample_max
 
         # plot curve (y: age vs. x: density)...
-        ax.fill_between(density, t, color=color_map.get(symbology), linewidth=0.5, edgecolor='k', alpha=1)
+        # # if number of samples in group is less than 3 color gray
+        # gray_mode = True if row['_group_n'] < 3 else False
+        # color = '#eaeaea' if gray_mode else color_map.get(symbology)
+        color = color_map.get(symbology)
+        ax.fill_between(density, t, color=color, linewidth=0.5, edgecolor='k', alpha=1)
         ax.set_xlim(0, sample_max+0.01)
     
     # adjust ax styling...
     ax.set_xlim(0, sample_max+0.001)                                    # set x limits according to density max
     ax.set_xticks([])                                                   # turn off x ticks
-    # ax.set_ylim(timeline[0], timeline[1])
     ax.set_ylim(ax.get_ylim())                                          # explicitly define y ticks (set outside function)
     yticks = np.arange(timeline[0], timeline[1]+1, 10)                  # define y tick marks
     ax.set_yticks(yticks)                                               # set y tick marks
@@ -560,7 +567,7 @@ def gmm_processing(df, k, random_state=111, timeline=[210, 450]):
 
     # get weighted component PDFs...
     stds_plot = np.clip(stds, 0.5, None)                               # plotting-only guard against extremely thin curve
-    components = [w * norm.pdf(timeline, loc=mu, scale=sd)             # calculate PDFs and keep in list
+    components = [w * norm.pdf(t, loc=mu, scale=sd)             # calculate PDFs and keep in list
                   for mu, sd, w in zip(means, stds_plot, weights)]    
     mixture = np.sum(components, axis=0)                               # total mixture curve
 
