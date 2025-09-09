@@ -739,3 +739,129 @@ def relative_drop_kmeans_k(wcss, start_k=2, min_gain=0.05, alpha=0.9, lookahead=
 
 
 
+
+
+def relative_drop_gmm_k(bic, k_prior=None, gamma=0.02, consecutive=2, eps_peak=0.002):
+    """
+    Select the number of GMM components k from a BIC sequence using a simple,
+    BIC-only elbow-style heuristic with a domain prior cap.
+
+    The procedure is deterministic and scale-aware (uses relative step changes):
+      1) **Interior minimum:** If BIC has any interior local minimum within the
+         capped range (k=2..Kcap−1), choose the interior k with the lowest BIC.
+      2) **Early bump → tail:** If there is an early rise followed by a
+         non-increasing tail, choose the junction (the first k after the peak).
+      3) **Monotone decrease:** If BIC is non-increasing over 1..Kcap, choose the
+         first plateau: the earliest k for which the next `consecutive` relative
+         drops are each ≤ `gamma` (i.e., further improvements are negligible).
+         If no plateau is found, pick the smallest k attaining the minimum BIC.
+      4) **Monotone increase:** If BIC is non-decreasing over 1..Kcap, return k=1.
+      5) **Fallback:** Otherwise (mixed/noisy), return the smallest k that attains
+         the minimum BIC within the cap.
+
+    Parameters
+    ----------
+    bic : array-like of shape (K,)
+        BIC values evaluated for k = 1..K (in order).
+    k_prior : int or None, optional
+        Optional domain upper bound on k (e.g., k <= 5). If provided, all choices
+        are restricted to k ≤ min(k_prior, K).
+    gamma : float, default=0.02  (≈2%)
+        Plateau threshold for the monotone-decrease case. Define the relative drop
+        at step k→k+1 as (BIC_k − BIC_{k+1}) / |BIC_k|; when the next
+        `consecutive` drops are each ≤ `gamma`, the curve is treated as flat.
+    consecutive : int, default=2
+        Number of consecutive small relative drops required to declare a plateau.
+        Increase to 3 for noisier curves; decrease to 1 for very smooth curves.
+    eps_peak : float, default=0.002  (≈0.2%)
+        Minimum relative rise ( (BIC_k − BIC_{k−1}) / |BIC_{k−1}| ) used to
+        identify a genuine early “bump” before a non-increasing tail.
+
+    Returns
+    -------
+    k_star : int
+        Selected number of components (1-based index into the original k grid).
+
+    Notes
+    -----
+    - The method is **BIC-only** by design (parsimonious) and uses relative
+      changes so it is insensitive to the absolute scale of BIC.
+    - Internally, tiny numerical tolerances are used: `tol` (~1e−9) for
+      monotonicity checks and `eps` (~1e−12) to avoid division by zero.
+    - Typical tuning ranges: `gamma` ∈ [0.01, 0.03], `consecutive` ∈ {2, 3},
+      `eps_peak` ∈ [0.002, 0.005].
+    - If multiple interior minima exist within the cap, the deepest (lowest BIC)
+      interior minimum is chosen.
+    """
+
+    ##### setup...
+    B = np.asarray(bic, dtype=float)                             # convert to numpy array (should already be in this format)
+    K = B.size                                                   # length of array
+    Kcap = min(int(k_prior), K) if k_prior is not None else K    # set cap on maximum K
+    eps = 1e-12                                                  # set
+    tol = 1e-9                                                   # set
+    Bc = B[:Kcap]                                                # effective BIC array (Kcap in length)
+    dB = np.diff(Bc)                                             # extract differences between subsequent steps
+    mono_inc = np.all(dB >= -tol)                                # mask for monotonic increasing BIC
+
+
+    ##### 1. interior minimum - choose lowest IC...
+    # check if Kcap has at least 3 points...
+    if Kcap >= 3:
+        
+        # get index positions
+        idxs = np.arange(1, Kcap-1)
+
+        # mask where current step is less than last step & current step is less than next step (find local minimums)
+        is_local_min = (Bc[idxs] + tol < Bc[idxs-1]) & (Bc[idxs] + tol < Bc[idxs+1])
+
+        # check if any local minima exist...
+        if np.any(is_local_min):
+
+            # get index of lowest minima
+            i_best = idxs[is_local_min][np.argmin(Bc[idxs[is_local_min]])]
+
+            # return 
+            return int(i_best + 1)
+
+
+    ##### 2. early rise followed by monotonic decreasing tail - choose junction (first k after the peak)...
+    # iterate through all possible index positions using Kcap...
+    for i in range(1, Kcap-1):
+
+        # calculate relative BIC change at current step from previous step
+        up_rel = (Bc[i] - Bc[i-1]) / max(abs(Bc[i-1]), eps)
+
+        # check if relative change is greater than eps_peak threshold value
+        if up_rel >= eps_peak:
+
+            # check if all relative changes are less than threshold
+            if np.all(np.diff(Bc[i:]) <= tol):
+
+                # return first drop after peak
+                return min(i + 2, Kcap)    
+
+
+    ##### 3. monotonic decreasing - choose first plateau (earliest small subsequent gains)...
+    # mask for monotonic decreasing BIC
+    mono_dec = np.all(dB <= tol)
+    if mono_dec:
+
+        # current relative decreases in BIC between current step and next step
+        gains = (Bc[:-1] - Bc[1:]) / np.maximum(np.abs(Bc[:-1]), eps)
+
+        # check if relative performance gains are consistent... 
+        for i in range(0, len(gains) - (consecutive - 1)):
+
+            if np.all(gains[i:i+consecutive] <= gamma):
+
+                # choose current K (before the plateau)
+                return int(i + 1)  
+            
+        # if no plateau, be conservative: choose the smallest k at the global min (should be Kcap)
+        return int(1 + np.argmin(Bc))
+
+
+    ##### 4. monotone increasing - choose k=1 (GMM not a good model)
+    if mono_inc:
+        return 1
