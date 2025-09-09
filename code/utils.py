@@ -661,3 +661,81 @@ def dbscan_processing(df, eps, min_samples):
 
     return df
 
+
+
+
+def relative_drop_kmeans_k(wcss, start_k=2, min_gain=0.05, alpha=0.9, lookahead=2):
+    """
+    Choose the optimal number of clusters (k) from a sequence of WCSS values using a relative-drop + slowdown heuristic.
+
+    Parameters
+    ----------
+    wcss (array-like, float): 
+        Within-cluster sum of squares for cluster counts k = 1..N.
+    min_gain (float, default=0.05):
+        Minimum required relative improvement (fractional drop) for a step to be considered as the elbow.
+    alpha (float, default=0.6):
+        Slowdown factor. After the candidate step, the next 1..`lookahead` drops must each be <= alpha * current drop.
+    lookahead (int, default=2):
+        Number of subsequent steps to check for slowdown. If 1, only check the immediate next drop; if 2, check the next two.
+
+    Returns
+    -------
+    k_star : int
+        The optimal cluster number (arrival k). If no step passes the heuristic, the function falls back to the arrival k corresponding to the maximum relative drop.
+
+    Notes
+    -----
+    - Relative drop at step k->k+1 is defined as:
+        (WCSS[k-1] - WCSS[k]) / WCSS[k-1]
+    - The "arrival k" is the cluster number after taking the drop
+      (i.e., k+1 in the notation above).
+    - Example: if the biggest qualifying drop is from 4->5 clusters,
+      the function returns k_star = 5.
+    """
+
+    ##### pre-processing...
+    wcss = np.asarray(wcss, dtype=float)             # convert to array of floats
+    rel_drop = (wcss[:-1] - wcss[1:]) / wcss[:-1]    # calculate relative drops of each step
+
+
+    ##### find optimal k (k_star)...
+     # initialize k_star
+    k_star = None 
+
+    # iterate through each step; i indexes step (k=i -> i+1)...
+    for i in range(1, len(rel_drop)):
+
+        # get current relative drop
+        curr = rel_drop[i]
+
+        # check if current relative drop is NAN or less than the minimum gain threshold; return None if true
+        if not np.isfinite(curr) or curr < min_gain:
+            continue
+
+        # determine how many future steps are available to actually check (near end of array there won't be enough steps left)
+        remaining_steps = len(rel_drop) - 1 - i
+        steps_to_check = min(lookahead, remaining_steps)
+
+        # check if enough steps remain for slowdown calculation; return None if not
+        if steps_to_check <= 0:
+            continue
+        
+        # get next drops to compare slowdown to current drop
+        next_drops = rel_drop[i+1 : i+1+steps_to_check]
+
+        # check if slowdown calculation is validarrival k (since rel_drop[i] is step i+1 -> i+2)
+        ok = all((not np.isfinite(nd)) or (nd <= alpha * curr) for nd in next_drops)
+        if ok:
+            k_star = start_k + i + 1
+            break
+
+    # fallback: choose arrival k of largest relative drop
+    if k_star is None:
+        i_argmax = int(np.nanargmax(rel_drop))
+        k_star = start_k + i_argmax + 1
+
+    return k_star
+
+
+
