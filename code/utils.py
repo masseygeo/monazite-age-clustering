@@ -1,12 +1,13 @@
 
 import pandas as pd
 import numpy as np
-from scipy.stats import norm, gaussian_kde, t
+from scipy.stats import norm, gaussian_kde, t, chi2
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch, Rectangle
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import DBSCAN
+
 
 
 
@@ -198,12 +199,12 @@ def plot_yttrium_panel(df, ax, y_col='Y2O3', y_color_col='garnet'):
     """
 
     # separate y_col values (Y2O3) by y_color_col (garnet indicator)
+    # if y_color_col == 'garnet':
     grt = df[df[y_color_col] == 1].copy()
     no_grt = df[df[y_color_col] == 0].copy()
-
-    # plot points
     ax.plot(grt[y_col], grt['age'], marker='o', markerfacecolor='red', markeredgecolor='k', markeredgewidth=0.3, linewidth=0, alpha=0.5)
     ax.plot(no_grt[y_col], no_grt['age'], marker='o', markerfacecolor='blue', markeredgecolor='k', markeredgewidth=0.3, linewidth=0, alpha=0.5)
+
 
     # adjust ax styling...
     xlims = (df[y_col].min(), df[y_col].max())                                 # get min and max limits
@@ -216,7 +217,6 @@ def plot_yttrium_panel(df, ax, y_col='Y2O3', y_color_col='garnet'):
     ax.set_ylim(ax.get_ylim())                                                 # set y limit to parent
     ax.tick_params(axis='y', which='major', length=0.0001, labelleft=False)    # minimize tick marks
     ax.grid(axis='y', color='gray', alpha=1, ls='--')
-    # ax.grid(False)                                                             # turn off grid lines
 
 
 
@@ -290,66 +290,186 @@ def plot_ageinterp_panel(df, ax, color_col, color_map, bar_width=0.4, gap=0.3, c
 
 
 
-def cluster_stats(ages, se, ci='2sigma'):
-    """
-    Compute Isoplot-style weighted mean statistics for a set of ages.
+# def cluster_stats(ages, se, ci='2sigma'):
+#     """
+#     Compute Isoplot-style weighted mean statistics for a set of ages.
 
-    The weighted mean uses inverse-variance weights (w_i = 1 / sigma_i^2). The mean
-    uncertainty is inflated by sqrt(MSWD) when MSWD > 1, matching common
-    geochronology practice. You can report either a 2 sigma half-width or a 95% CI
-    half-width (Student's t, df = n-1).
+#     The weighted mean uses inverse-variance weights (w_i = 1 / sigma_i^2). The mean
+#     uncertainty is inflated by sqrt(MSWD) when MSWD > 1, matching common
+#     geochronology practice. You can report either a 2 sigma half-width or a 95% CI
+#     half-width (Student's t, df = n-1).
 
-    Args:
-        ages (array-like of float): Measured ages (units arbitrary but consistent).
-        se (array-like of float): 1 sigma uncertainties (standard errors) for each age.
-        ci (str, optional): If '2sigma', return half-width = 2 sigma_mean.
-            If '95%', return half-width for a two-sided 95% confidence interval
-            using t_{0.975, n-1}. Defaults to '2sigma'.
+#     Args:
+#         ages (array-like of float): Measured ages (units arbitrary but consistent).
+#         se (array-like of float): 1 sigma uncertainties (standard errors) for each age.
+#         ci (str, optional): If '2sigma', return half-width = 2 sigma_mean.
+#             If '95%', return half-width for a two-sided 95% confidence interval
+#             using t_{0.975, n-1}. Defaults to '2sigma'.
 
-    Returns:
-        dict: {
-            'mean' (float): Weighted mean age.
-            'mswd' (float): Mean square of weighted deviates, chi squared/(n-1).
-            'n' (int): Number of observations.
-            'sigma_mean' (float): Standard error of the weighted mean, inflated
-                                 by sqrt(MSWD) if MSWD > 1.
-            'halfwidth' (float): Requested half-width (2 sigma or 95% CI).
-        }
-    """
+#     Returns:
+#         dict: {
+#             'mean' (float): Weighted mean age.
+#             'mswd' (float): Mean square of weighted deviates, chi squared/(n-1).
+#             'n' (int): Number of observations.
+#             'sigma_mean' (float): Standard error of the weighted mean, inflated
+#                                  by sqrt(MSWD) if MSWD > 1.
+#             'halfwidth' (float): Requested half-width (2 sigma or 95% CI).
+#         }
+#     """
 
-    # from data...
-    n = len(ages)           # number of observations
-    w = 1.0 / (se ** 2)     # weights (inverse variance)
+#     # from data...
+#     n = len(ages)           # number of observations
+#     w = 1.0 / (se ** 2)     # weights (inverse variance)
     
+#     # weighted mean
+#     W = np.sum(w)                       # sum of inverse variances
+#     mu = np.average(ages, weights=w)    # weighted mean
 
-    # weighted mean
-    W = np.sum(w)                       # sum of inverse variances
-    mu = np.average(ages, weights=w)    # weighted mean
+#     # MSWD (chi squared/(n-1))...
+#     chi2 = np.dot(w, (ages - mu) ** 2)    # chi squared statistic
+#     df_ = max(n-1, 1)                     # degrees of freedom
+#     mswd = chi2 / df_                     # mswd
 
-    # MSWD (chi squared/(n-1))...
-    chi2 = np.dot(w, (ages - mu) ** 2)    # chi squared statistic
-    df_ = max(n-1, 1)                     # degrees of freedom
-    mswd = chi2 / df_                     # mswd
+#     # compute uncertainty on the weighted mean (inflate if MSWD>1)...
+#     sigma_mu = np.sqrt(1.0 / W)                                              # uninflated uncertainty
+#     sigma_mu_adj = sigma_mu * np.sqrt(mswd) if mswd > 1 else sigma_mu        # inflate if mswd > 1
 
-    # compute uncertainty on the weighted mean (inflate if MSWD>1)...
-    sigma_mu = np.sqrt(1.0 / W)                                              # uninflated uncertainty
-    sigma_mu_adj = sigma_mu * np.sqrt(mswd) if mswd > 1 else sigma_mu        # inflate if mswd > 1
+#     # calculate 2 sigma or 95% CI of mean...
+#     if ci == '2sigma':
+#         half_width = 2.0 * sigma_mu_adj
 
-    # calculate 2 sigma or 95% CI of mean...
+#     elif ci == '95%':
+#         tcrit = t.ppf(0.975, df=df_)          # calculate student's t critical value for 95% CI
+#         half_width = tcrit * sigma_mu_adj     # get halfwidth
+
+#     return {
+#         "mean": mu,                    # weighted mean age
+#         "mswd": mswd,                  # mswd
+#         "n": n,                        # number of observations
+#         "sigma_mean": sigma_mu_adj,    # standard error of the weighted mean (1 sigma)
+#         "halfwidth": half_width        # confidence interval halfwidth (2 sigma or 95% CI)
+#     }
+
+
+# import numpy as np
+# from scipy.stats import t, chi2
+def cluster_stats(ages, se, ci='95%', p_threshold=0.15):
+    """
+    Compute weighted-mean age statistics with Isoplot-style error reporting.
+    - Weighted mean uses inverse-variance weights: w_i = 1 / se_i^2 (Model-1).
+    - Goodness-of-fit via chi^2 (df = n-1) and MSWD = chi^2 / df.
+    - Confidence interval reporting follows Isoplot's rule:
+        - If p-value >= p_threshold  → report "internal" uncertainty.
+        - If p-value <  p_threshold  → inflate by sqrt(MSWD).
+    - Returned CI defaults to two-sided 95% (Student's t with df = n-1).
+    - Optionally, return a 2 sigma CI for comparability.
+
+    Parameters
+    ----------
+    ages : array-like of float
+        Measured ages (consistent units).
+    se : array-like of float
+        1 sigma analytical uncertainties (standard errors) for each age.
+    ci : {'95%', '2sigma'}, optional (default='95%')
+        Which half-width to return in the 'halfwidth' field.
+        - '95%': two-sided 95% CI = t_{0.975, df} * SE(mean) * inflation
+        - '2sigma': 2 * SE(mean) * inflation
+        The inflation factor is 1 if p >= p_threshold, else sqrt(MSWD).
+    p_threshold : float, optional (default=0.15)
+        Probability-of-fit cutoff for applying the MSWD expansion (Isoplot default).
+
+    Returns
+    -------
+    dict with keys:
+        mean : float
+            Inverse-variance weighted mean age.
+        mswd : float
+            Mean Square of Weighted Deviates (reduced chi-square).
+        n : int
+            Number of observations.
+        df : int
+            Degrees of freedom used for chi-square/MSWD (n - 1).
+        chi2 : float
+            Chi-square statistic.
+        p_value : float
+            Probability-of-fit = 1 - CDF_{chi2}(chi2; df).
+        sigma_mean_internal : float
+            Standard error of the weighted mean (1 sigma) WITHOUT any inflation.
+        inflation_applied : bool
+            Whether sqrt(MSWD) inflation was applied (i.e., p_value < p_threshold).
+        halfwidth : float
+            Requested half-width (per 'ci'): either 95% CI or 2 sigma, with Isoplot-style inflation policy.
+
+    Notes
+    -----
+    * Defaulting to 95% CI provides the correct small-sample behavior (Student's t)
+      and aligns with modern guidance to report consistent 95% confidence intervals
+      rather than mixing “2 sigma” and “95% conf.” across outputs.
+    * The inflation rule (use sqrt(MSWD) when probability-of-fit < 0.15) mirrors
+      Isoplot's long-standing convention.
+    """
+
+    ages = np.asarray(ages, dtype=float)
+    se = np.asarray(se, dtype=float)
+
+    # if ages.size != se.size:
+    #     raise ValueError("ages and se must have the same length.")
+    # if ages.size < 1:
+    #     raise ValueError("At least one observation is required.")
+    # if np.any(se <= 0) or not np.all(np.isfinite(se)):
+    #     raise ValueError("All standard errors must be positive and finite.")
+
+    n = int(ages.size)
+    df = max(n - 1, 1)
+
+    # Inverse-variance weights and weighted mean
+    w = 1.0 / (se ** 2)
+    W = np.sum(w)
+    mu = np.average(ages, weights=w)
+
+    # Chi-square, MSWD, p-value
+    residuals = ages - mu
+    chi2_stat = float(np.dot(w, residuals ** 2))
+    mswd = chi2_stat / df
+    p_val = 1.0 - chi2.cdf(chi2_stat, df)
+
+    # Standard error of the weighted mean (internal, 1σ)
+    sigma_mu_internal = np.sqrt(1.0 / W)
+
+    # Isoplot-style inflation policy
+    # Inflate by sqrt(MSWD) ONLY if probability-of-fit < threshold; never deflate.
+    inflation = np.sqrt(mswd) if (p_val < p_threshold and mswd > 1.0) else 1.0
+
+    # Half-widths per policy
+    tcrit = t.ppf(0.975, df)
+    half_95 = tcrit * sigma_mu_internal * inflation
+    half_2s = 2.0 * sigma_mu_internal * inflation
+
+    # Choose which half-width to return
     if ci == '2sigma':
-        half_width = 2.0 * sigma_mu_adj
+        chosen_half = half_2s
+    else:
+        chosen_half = half_95
 
-    elif ci == '95%':
-        tcrit = t.ppf(0.975, df=df_)          # calculate student's t critical value for 95% CI
-        half_width = tcrit * sigma_mu_adj     # get halfwidth
-
-    return {
-        "mean": mu,                    # weighted mean age
-        "mswd": mswd,                  # mswd
-        "n": n,                        # number of observations
-        "sigma_mean": sigma_mu_adj,    # standard error of the weighted mean (1 sigma)
-        "halfwidth": half_width        # confidence interval halfwidth (2 sigma or 95% CI)
+    out = {
+        "mean": mu,
+        "mswd": mswd,
+        "n": n,
+        "df": df,
+        "chi2": chi2_stat,
+        "p_value": p_val,
+        "sigma_mean_internal": sigma_mu_internal,
+        "halfwidth": chosen_half,
     }
+
+    return out
+
+
+
+
+
+
+
 
 
 
