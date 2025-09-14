@@ -145,7 +145,7 @@ def plot_kde_panel(df, ax, timeline=[210, 450]):
     errors = df['error'].to_numpy()                    # array of errors (1 sigma)
     t = np.linspace(timeline[0], timeline[-1], 1000)   # age range to create KDE
 
-    # calculate standard KDE...
+    # calculate standard KDE (Scott's Rule)...
     kde = gaussian_kde(ages)
     density_std = kde(t)
 
@@ -221,7 +221,7 @@ def plot_yttrium_panel(df, ax, y_col='Y2O3', y_color_col='garnet'):
 
 
 
-def plot_ageinterp_panel(df, ax, color_col, color_map, bar_width=0.4, gap=0.3, ci='2sigma'):
+def plot_ageinterp_panel(df, ax, color_col, color_map, bar_width=0.4, gap=0.3, ci='95%'):
     """
     Plot weighted mean age metrics (individual ages, errors, and MSWD).
 
@@ -289,70 +289,6 @@ def plot_ageinterp_panel(df, ax, color_col, color_map, bar_width=0.4, gap=0.3, c
 
 
 
-
-# def cluster_stats(ages, se, ci='2sigma'):
-#     """
-#     Compute Isoplot-style weighted mean statistics for a set of ages.
-
-#     The weighted mean uses inverse-variance weights (w_i = 1 / sigma_i^2). The mean
-#     uncertainty is inflated by sqrt(MSWD) when MSWD > 1, matching common
-#     geochronology practice. You can report either a 2 sigma half-width or a 95% CI
-#     half-width (Student's t, df = n-1).
-
-#     Args:
-#         ages (array-like of float): Measured ages (units arbitrary but consistent).
-#         se (array-like of float): 1 sigma uncertainties (standard errors) for each age.
-#         ci (str, optional): If '2sigma', return half-width = 2 sigma_mean.
-#             If '95%', return half-width for a two-sided 95% confidence interval
-#             using t_{0.975, n-1}. Defaults to '2sigma'.
-
-#     Returns:
-#         dict: {
-#             'mean' (float): Weighted mean age.
-#             'mswd' (float): Mean square of weighted deviates, chi squared/(n-1).
-#             'n' (int): Number of observations.
-#             'sigma_mean' (float): Standard error of the weighted mean, inflated
-#                                  by sqrt(MSWD) if MSWD > 1.
-#             'halfwidth' (float): Requested half-width (2 sigma or 95% CI).
-#         }
-#     """
-
-#     # from data...
-#     n = len(ages)           # number of observations
-#     w = 1.0 / (se ** 2)     # weights (inverse variance)
-    
-#     # weighted mean
-#     W = np.sum(w)                       # sum of inverse variances
-#     mu = np.average(ages, weights=w)    # weighted mean
-
-#     # MSWD (chi squared/(n-1))...
-#     chi2 = np.dot(w, (ages - mu) ** 2)    # chi squared statistic
-#     df_ = max(n-1, 1)                     # degrees of freedom
-#     mswd = chi2 / df_                     # mswd
-
-#     # compute uncertainty on the weighted mean (inflate if MSWD>1)...
-#     sigma_mu = np.sqrt(1.0 / W)                                              # uninflated uncertainty
-#     sigma_mu_adj = sigma_mu * np.sqrt(mswd) if mswd > 1 else sigma_mu        # inflate if mswd > 1
-
-#     # calculate 2 sigma or 95% CI of mean...
-#     if ci == '2sigma':
-#         half_width = 2.0 * sigma_mu_adj
-
-#     elif ci == '95%':
-#         tcrit = t.ppf(0.975, df=df_)          # calculate student's t critical value for 95% CI
-#         half_width = tcrit * sigma_mu_adj     # get halfwidth
-
-#     return {
-#         "mean": mu,                    # weighted mean age
-#         "mswd": mswd,                  # mswd
-#         "n": n,                        # number of observations
-#         "sigma_mean": sigma_mu_adj,    # standard error of the weighted mean (1 sigma)
-#         "halfwidth": half_width        # confidence interval halfwidth (2 sigma or 95% CI)
-#     }
-
-
-# import numpy as np
-# from scipy.stats import t, chi2
 def cluster_stats(ages, se, ci='95%', p_threshold=0.15):
     """
     Compute weighted-mean age statistics with Isoplot-style error reporting.
