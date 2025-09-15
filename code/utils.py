@@ -824,13 +824,13 @@ def relative_drop_gmm_k(bic, k_prior=None, gamma=0.02, consecutive=2, eps_peak=0
         are restricted to k ≤ min(k_prior, K).
     gamma : float, default=0.02  (≈2%)
         Plateau threshold for the monotone-decrease case. Define the relative drop
-        at step k→k+1 as (BIC_k − BIC_{k+1}) / |BIC_k|; when the next
+        at step k→k+1 as (BIC_k - BIC_{k+1}) / |BIC_k|; when the next
         `consecutive` drops are each ≤ `gamma`, the curve is treated as flat.
     consecutive : int, default=2
         Number of consecutive small relative drops required to declare a plateau.
         Increase to 3 for noisier curves; decrease to 1 for very smooth curves.
     eps_peak : float, default=0.002  (≈0.2%)
-        Minimum relative rise ( (BIC_k − BIC_{k−1}) / |BIC_{k−1}| ) used to
+        Minimum relative rise ( (BIC_k - BIC_{k-1}) / |BIC_{k-1}| ) used to
         identify a genuine early “bump” before a non-increasing tail.
 
     Returns
