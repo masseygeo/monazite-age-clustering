@@ -11,42 +11,32 @@ from sklearn.cluster import DBSCAN
 
 
 
-##### GLOBAL DICTIONARY SYMBOLOGIES
+##### SYMBOLOGIES
 # color mappeer for monazite zoning
-texture_colors = {'core': '#239BA7', 
-                  'overgrowth': '#ECECBB', 
-                  'rim': '#E1AA36'}
+texture_colors = {
+    'core': '#239BA7', 
+    'overgrowth': '#ECECBB', 
+    'rim': '#E1AA36'
+    }
+
+# color mapper for age populations
+age_group_colors = {
+    0:'#ff595e', 
+    1:'#ff924c', 
+    2:'#ffca3a', 
+    3:'#c5ca30', 
+    4:'#8ac926', 
+    5:'#52a675',
+    6:'#1982c4',
+    7:'#4267ac',
+    8:'#6a4c93',
+    9:'#2c4875',
+    10:'#00202e',
+    -1:'#eaeaea'
+    }
 
 
-# color palette for cluster groups (-1 represents outliers with DBSCAN/HDBSCAN)
-# age_group_colors = {0:'#f25117', 
-#                     1:'#f2a104', 
-#                     2:'#00743f', 
-#                     3:'#72a2c0', 
-#                     4:'#1d65a6', 
-#                     5:'#192e5b',
-#                     6:'k',
-#                     7:'red',
-#                     8:'blue',
-#                     9:'darkred',
-#                     10:'green',
-#                     -1:'#b1b8bc'}
-
-age_group_colors = {0:'#ff595e', 
-                    1:'#ff924c', 
-                    2:'#ffca3a', 
-                    3:'#c5ca30', 
-                    4:'#8ac926', 
-                    5:'#52a675',
-                    6:'#1982c4',
-                    7:'#4267ac',
-                    8:'#6a4c93',
-                    9:'#2c4875',
-                    10:'#00202e',
-                    -1:'#eaeaea'}
-
-
-
+##### PLOTTING FUNCTIONS
 def plot_samples_panel(df, ax, color_col, color_map, label_bool=True, timeline=[210, 450], y_label='Age (Ma)'):
     """
     Plot probability density curves for individual monazite samples on a given axis.
